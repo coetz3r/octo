@@ -5,7 +5,7 @@ import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-
+# Menory class
 class Memory:
     def __init__(self):
         self.filename = os.path.join(BASE_DIR, "memory.json")
@@ -32,7 +32,7 @@ class Memory:
             except json.JSONDecodeError:
                 self.experiences = []
 
-
+# value class
 class Values:
     def __init__(self):
         self.filename = os.path.join(BASE_DIR, "values.json")
@@ -58,7 +58,7 @@ class Values:
             except json.JSONDecodeError:
                 self.values = {}
 
-
+# Agent class
 class Agent:
     def __init__(self):
         self.memory = Memory()
@@ -67,7 +67,7 @@ class Agent:
         self.head_x = 0.0
         self.head_y = 0.0
 
-        # 🔑 PUBLIC STATE (GUI READS ONLY)
+        # PUBLIC STATE (GUI READS ONLY)
         self.state = {
             "stimulus": None,
             "action": None,
@@ -117,7 +117,7 @@ class Agent:
         self.memory.store({"stimulus": stimulus, "action": action, "reward": reward})
         self.values.update(action, reward)
 
-        # 🔎 Update public state
+        # Update public state
         self.state["stimulus"] = stimulus
         self.state["action"] = action
         self.state["reward"] = reward
