@@ -1,117 +1,180 @@
-import os
-import json
-import time
 import random
+import time
 
-# -------------------
-# Memory class
-# -------------------
+
+# -----------------------------
+# Memory System
+# -----------------------------
 class Memory:
     def __init__(self):
-        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-        self.filename = os.path.join(BASE_DIR, "memory.json")
-        self.experiences = []
-        self.load()  # Load existing memory
+        self.experiences = []      # list of dicts
+        self.values = {}           # action:value memory
 
-    def load(self):
-        if os.path.exists(self.filename):
-            try:
-                with open(self.filename, "r") as f:
-                    data = json.load(f)
-                if isinstance(data, list):
-                    self.experiences = data
-                else:
-                    self.experiences = []
-            except:
-                self.experiences = []
-        else:
-            self.experiences = []
+    def store(self, experience):
+        # experience MUST be a dict
+        self.experiences.append(experience)
 
-    def store(self, stimulus):
-        self.experiences.append(stimulus)
-        self.save()
+    def novelty(self, stimulus_type):
+        count = sum(
+            1 for e in self.experiences
+            if e.get("stimulus_type") == stimulus_type
+        )
+        return 1.0 / (1 + count)
 
-    def novelty(self, stimulus):
-        return 1.0 / (1 + sum(1 for e in self.experiences if e == stimulus))
+    def update_value(self, key, reward, alpha=0.2):
+        old = self.values.get(key, 0.0)
+        new = old + alpha * (reward - old)
+        self.values[key] = new
 
-    def save(self):
-        with open(self.filename, "w") as f:
-            json.dump(self.experiences, f, indent=2)
+    def get_value(self, key):
+        return self.values.get(key, 0.0)
 
-# -------------------
-# Values class
-# -------------------
-class Values:
-    def __init__(self):
-        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-        self.filename = os.path.join(BASE_DIR, "values.json")
-        self.data = {}
-        self.load()  # Load existing values
 
-    def update(self, reward):
-        for key, val in reward.items():
-            self.data[key] = self.data.get(key, 0) + val
-        self.save()
-
-    def load(self):
-        if os.path.exists(self.filename):
-            try:
-                with open(self.filename, "r") as f:
-                    data = json.load(f)
-                if isinstance(data, dict):
-                    self.data = data
-                else:
-                    self.data = {}
-            except:
-                self.data = {}
-        else:
-            self.data = {}
-
-    def save(self):
-        with open(self.filename, "w") as f:
-            json.dump(self.data, f, indent=2)
-
-# -------------------
-# Agent class
-# -------------------
+# -----------------------------
+# Agent
+# -----------------------------
 class Agent:
     def __init__(self):
         self.memory = Memory()
-        self.values = Values()
 
+        # head orientation (normalized)
+        self.head_x = 0.5  # yaw
+        self.head_y = 0.5  # pitch
+
+        self.actions = [
+            "look_left",
+            "look_right",
+            "look_up",
+            "look_down",
+            "wait"
+        ]
+
+    # -------------------------
+    # Perception (simulation)
+    # -------------------------
     def perceive(self):
-        # Example stimulus
-        return random.choice(["light", "sound", "touch", "movement"])
+        """
+        Simulated stimulus.
+        Replace later with real vision / audio.
+        """
+        return {
+            "type": random.choice(["light", "sound", "movement"]),
+            "x": random.random(),
+            "y": random.random()
+        }
 
-    def decide(self, stimulus):
-        # Example action
-        return random.choice(["look", "move", "grab", "wait"])
+    # -------------------------
+    # Appraisal
+    # -------------------------
+    def appraise(self, stimulus):
+        novelty = self.memory.novelty(stimulus["type"])
 
-    def act(self, action):
-        print(f"Performing action: {action}")
+        dx = abs(stimulus["x"] - self.head_x)
+        dy = abs(stimulus["y"] - self.head_y)
+        distance = dx + dy
 
-    def reward(self, stimulus):
-        # Example reward system
-        return {stimulus: random.random()}
+        salience = 1.0 - distance
+        salience = max(0.0, salience)
 
+        return {
+            "novelty": novelty,
+            "salience": salience
+        }
+
+    # -------------------------
+    # Decision
+    # -------------------------
+    def choose_action(self, stimulus, appraisal):
+        # exploration
+        if random.random() < appraisal["novelty"]:
+            return random.choice(self.actions)
+
+        # exploitation
+        scored = []
+        for action in self.actions:
+            key = f"{action}:{stimulus['type']}"
+            value = self.memory.get_value(key)
+            scored.append((value, action))
+
+        scored.sort(reverse=True)
+        return scored[0][1]
+
+    # -------------------------
+    # Action (Head Movement)
+    # -------------------------
+    def perform_action(self, action, stimulus):
+        step = 0.1
+
+        if action == "look_left":
+            self.head_x -= step
+        elif action == "look_right":
+            self.head_x += step
+        elif action == "look_up":
+            self.head_y -= step
+        elif action == "look_down":
+            self.head_y += step
+        elif action == "wait":
+            pass
+
+        # clamp head movement
+        self.head_x = min(max(self.head_x, 0.0), 1.0)
+        self.head_y = min(max(self.head_y, 0.0), 1.0)
+
+        return self.compute_reward(stimulus)
+
+    # -------------------------
+    # Reward Function
+    # -------------------------
+    def compute_reward(self, stimulus):
+        dx = abs(stimulus["x"] - self.head_x)
+        dy = abs(stimulus["y"] - self.head_y)
+
+        distance = dx + dy
+        reward = 1.0 - distance
+
+        return max(0.0, reward)
+
+    # -------------------------
+    # Learning Loop
+    # -------------------------
     def step(self):
         stimulus = self.perceive()
-        action = self.decide(stimulus)
-        self.act(action)
+        appraisal = self.appraise(stimulus)
+        action = self.choose_action(stimulus, appraisal)
+        reward = self.perform_action(action, stimulus)
 
-        reward = self.reward(stimulus)
-        self.values.update(reward)
+        key = f"{action}:{stimulus['type']}"
+        self.memory.update_value(key, reward)
 
-        novelty = self.memory.novelty(stimulus)
-        self.memory.store(stimulus)
+        self.memory.store({
+            "stimulus_type": stimulus["type"],
+            "action": action,
+            "reward": reward,
+            "head_x": self.head_x,
+            "head_y": self.head_y
+        })
 
-        print(f"Stimulus: {stimulus}, Action: {action}, Novelty: {novelty:.2f}")
+        return {
+            "stimulus": stimulus,
+            "action": action,
+            "reward": reward,
+            "head": (self.head_x, self.head_y)
+        }
 
-# -------------------
-# Run headless agent
-# -------------------
+
+# -----------------------------
+# Standalone test loop
+# -----------------------------
 if __name__ == "__main__":
     agent = Agent()
-    while True:
-        agent.step()
+
+    for i in range(50):
+        result = agent.step()
+        print(
+            f"{i:03d} | "
+            f"stimulus={result['stimulus']['type']} "
+            f"action={result['action']} "
+            f"reward={result['reward']:.3f} "
+            f"head={result['head']}"
+        )
         time.sleep(0.1)
