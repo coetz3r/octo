@@ -11,13 +11,31 @@ class AgentGUI:
         self.root = tk.Tk()
         self.root.title("Octo Cognition Monitor")
 
+        #  Window size
+        self.root.geometry("500x300")
+
+        #  Main container (centering)
+        self.container = tk.Frame(self.root)
+        self.container.pack(expand=True)
+
         self.labels = {}
+
+        font = ("Courier", 14)
+
         for key in ["stimulus", "action", "reward", "head"]:
-            lbl = tk.Label(self.root, text="", font=("Courier", 12), anchor="w", justify="left")
-            lbl.pack(fill="x")
+            lbl = tk.Label(
+                self.container,
+                text="",
+                font=font,
+                width=50,
+                anchor="center",
+                pady=5
+            )
+            lbl.pack()
             self.labels[key] = lbl
 
         self.update_gui()
+
 
     def update_gui(self):
         state = self.agent.state
