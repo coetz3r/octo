@@ -12,7 +12,7 @@ class AgentGUI:
         self.root.title("Octo Cognition Monitor")
 
         #  Window size
-        self.root.geometry("500x300")
+        self.root.geometry("850x300")
 
         #  Main container (centering)
         self.container = tk.Frame(self.root)
@@ -20,14 +20,14 @@ class AgentGUI:
 
         self.labels = {}
 
-        font = ("Courier", 14)
+        font = ("Courier", 12)
 
         for key in ["stimulus", "action", "reward", "head"]:
             lbl = tk.Label(
                 self.container,
                 text="",
                 font=font,
-                width=50,
+                width=350,
                 anchor="center",
                 pady=5
             )
