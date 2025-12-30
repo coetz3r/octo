@@ -11,30 +11,28 @@ class Memory:
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         self.filename = os.path.join(BASE_DIR, "memory.json")
         self.experiences = []
-        self.load()
+        self.load()  # Load existing memory
+
+    def load(self):
+        if os.path.exists(self.filename):
+            try:
+                with open(self.filename, "r") as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    self.experiences = data
+                else:
+                    self.experiences = []
+            except:
+                self.experiences = []
+        else:
+            self.experiences = []
 
     def store(self, stimulus):
         self.experiences.append(stimulus)
         self.save()
 
     def novelty(self, stimulus):
-        # Simple novelty: count how many times stimulus seen
         return 1.0 / (1 + sum(1 for e in self.experiences if e == stimulus))
-
-def load(self):
-    if os.path.exists(self.filename):
-        try:
-            with open(self.filename, "r") as f:
-                data = json.load(f)
-            # Ensure it's a list
-            if isinstance(data, list):
-                self.experiences = data
-            else:
-                self.experiences = []
-        except:
-            self.experiences = []
-    else:
-        self.experiences = []
 
     def save(self):
         with open(self.filename, "w") as f:
@@ -48,7 +46,7 @@ class Values:
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         self.filename = os.path.join(BASE_DIR, "values.json")
         self.data = {}
-        self.load()
+        self.load()  # Load existing values
 
     def update(self, reward):
         for key, val in reward.items():
@@ -59,7 +57,11 @@ class Values:
         if os.path.exists(self.filename):
             try:
                 with open(self.filename, "r") as f:
-                    self.data = json.load(f)
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    self.data = data
+                else:
+                    self.data = {}
             except:
                 self.data = {}
         else:
@@ -78,18 +80,18 @@ class Agent:
         self.values = Values()
 
     def perceive(self):
-        # Random stimulus for testing
+        # Example stimulus
         return random.choice(["light", "sound", "touch", "movement"])
 
     def decide(self, stimulus):
-        # Random action for testing
+        # Example action
         return random.choice(["look", "move", "grab", "wait"])
 
     def act(self, action):
         print(f"Performing action: {action}")
 
     def reward(self, stimulus):
-        # Simple reward
+        # Example reward system
         return {stimulus: random.random()}
 
     def step(self):
@@ -106,7 +108,7 @@ class Agent:
         print(f"Stimulus: {stimulus}, Action: {action}, Novelty: {novelty:.2f}")
 
 # -------------------
-# Run headless
+# Run headless agent
 # -------------------
 if __name__ == "__main__":
     agent = Agent()
