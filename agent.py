@@ -1,154 +1,110 @@
+import os
+import json
 import time
 import random
-import json
-import os
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# In Memory class:
-self.filename = os.path.join(BASE_DIR, "memory.json")
-
-# In Values class:
-self.filename = os.path.join(BASE_DIR, "values.json")
-
-# ---------------- MEMORY ----------------
-
+# -------------------
+# Memory class
+# -------------------
 class Memory:
-    def __init__(self, filename="memory.json"):
-        self.filename = filename
+    def __init__(self):
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        self.filename = os.path.join(BASE_DIR, "memory.json")
         self.experiences = []
-        self.stimulus_count = {}
         self.load()
 
-    def store(self, experience):
-        self.experiences.append(experience)
-
-        s = experience["stimulus"]
-        self.stimulus_count[s] = self.stimulus_count.get(s, 0) + 1
-
+    def store(self, stimulus):
+        self.experiences.append(stimulus)
         self.save()
 
     def novelty(self, stimulus):
-        count = self.stimulus_count.get(stimulus, 0)
-        return 1 / (1 + count)
-
-    def save(self):
-        data = {
-            "experiences": self.experiences,
-            "stimulus_count": self.stimulus_count
-        }
-        with open(self.filename, "w") as f:
-            json.dump(data, f, indent=2)
+        # Simple novelty: count how many times stimulus seen
+        return 1.0 / (1 + sum(1 for e in self.experiences if e == stimulus))
 
     def load(self):
-        if not os.path.exists(self.filename):
-            return
-        with open(self.filename, "r") as f:
-            data = json.load(f)
-            self.experiences = data.get("experiences", [])
-            self.stimulus_count = data.get("stimulus_count", {})
+        if os.path.exists(self.filename):
+            try:
+                with open(self.filename, "r") as f:
+                    self.experiences = json.load(f)
+            except:
+                self.experiences = []
+        else:
+            self.experiences = []
 
-# ---------------- VALUE SYSTEM ----------------
+    def save(self):
+        with open(self.filename, "w") as f:
+            json.dump(self.experiences, f, indent=2)
 
+# -------------------
+# Values class
+# -------------------
 class Values:
-    def __init__(self, filename="values.json"):
-        self.filename = filename
-        self.state = 0.0
+    def __init__(self):
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        self.filename = os.path.join(BASE_DIR, "values.json")
+        self.data = {}
         self.load()
 
     def update(self, reward):
-        self.state += reward
-        self.state = max(-100, min(100, self.state))
+        for key, val in reward.items():
+            self.data[key] = self.data.get(key, 0) + val
         self.save()
 
-    def mood(self):
-        if self.state > 20:
-            return "happy"
-        elif self.state < -20:
-            return "frustrated"
-        return "neutral"
+    def load(self):
+        if os.path.exists(self.filename):
+            try:
+                with open(self.filename, "r") as f:
+                    self.data = json.load(f)
+            except:
+                self.data = {}
+        else:
+            self.data = {}
 
     def save(self):
         with open(self.filename, "w") as f:
-            json.dump({"state": self.state}, f)
+            json.dump(self.data, f, indent=2)
 
-    def load(self):
-        if not os.path.exists(self.filename):
-            return
-        with open(self.filename, "r") as f:
-            self.state = json.load(f).get("state", 0.0)
-
-# ---------------- SENSORS ----------------
-
-def sense_environment():
-    # mock perception (replace later with camera, mic, etc.)
-    return random.choice(["silence", "sound", "movement"])
-
-
-# ---------------- ACTIONS ----------------
-
-def choose_action(stimulus, mood):
-    if stimulus == "sound":
-        return "listen"
-    if stimulus == "movement":
-        return "look"
-    return "wait"
-
-
-def perform_action(action):
-    print(f"Action: {action}")
-    time.sleep(0.5)
-
-# ---------------- AGENT ----------------
-
+# -------------------
+# Agent class
+# -------------------
 class Agent:
     def __init__(self):
         self.memory = Memory()
         self.values = Values()
 
-    def evaluate(self, stimulus, action):
-        reward = 0.0
+    def perceive(self):
+        # Random stimulus for testing
+        return random.choice(["light", "sound", "touch", "movement"])
 
-        if stimulus == "sound" and action == "listen":
-            reward += 2
-        if stimulus == "movement" and action == "look":
-            reward += 2
+    def decide(self, stimulus):
+        # Random action for testing
+        return random.choice(["look", "move", "grab", "wait"])
 
-        reward -= 0.3
+    def act(self, action):
+        print(f"Performing action: {action}")
 
-        curiosity = self.memory.novelty(stimulus)
-        reward += curiosity * 3
-
-        return reward
+    def reward(self, stimulus):
+        # Simple reward
+        return {stimulus: random.random()}
 
     def step(self):
-        stimulus = sense_environment()
-        mood = self.values.mood()
-        action = choose_action(stimulus, mood)
+        stimulus = self.perceive()
+        action = self.decide(stimulus)
+        self.act(action)
 
-        novelty = self.memory.novelty(stimulus)
-        reward = self.evaluate(stimulus, action)
-
+        reward = self.reward(stimulus)
         self.values.update(reward)
 
-        self.memory.store({
-            "stimulus": stimulus,
-            "action": action,
-            "reward": reward,
-            "novelty": novelty,
-            "value_state": self.values.state
-        })
+        novelty = self.memory.novelty(stimulus)
+        self.memory.store(stimulus)
 
-        print(f"Stimulus: {stimulus} | Mood: {mood} | Reward: {reward:.2f}")
-        print(f"Novelty: {novelty:.2f}")
+        print(f"Stimulus: {stimulus}, Action: {action}, Novelty: {novelty:.2f}")
 
-        perform_action(action)
-
-# ---------------- MAIN LOOP ----------------
-
+# -------------------
+# Run headless
+# -------------------
 if __name__ == "__main__":
     agent = Agent()
     while True:
         agent.step()
         time.sleep(0.1)
-
