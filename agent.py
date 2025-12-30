@@ -21,15 +21,20 @@ class Memory:
         # Simple novelty: count how many times stimulus seen
         return 1.0 / (1 + sum(1 for e in self.experiences if e == stimulus))
 
-    def load(self):
-        if os.path.exists(self.filename):
-            try:
-                with open(self.filename, "r") as f:
-                    self.experiences = json.load(f)
-            except:
+def load(self):
+    if os.path.exists(self.filename):
+        try:
+            with open(self.filename, "r") as f:
+                data = json.load(f)
+            # Ensure it's a list
+            if isinstance(data, list):
+                self.experiences = data
+            else:
                 self.experiences = []
-        else:
+        except:
             self.experiences = []
+    else:
+        self.experiences = []
 
     def save(self):
         with open(self.filename, "w") as f:
