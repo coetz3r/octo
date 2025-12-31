@@ -1,131 +1,120 @@
-import json
-import os
-import random
+# agent.py
 import time
+import json
+from queue import Queue
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+from memory import Memory
+from state import InternalState
+from perception import Perception
+from action import Action
 
-# Menory class
-class Memory:
-    def __init__(self):
-        self.filename = os.path.join(BASE_DIR, "memory.json")
-        self.experiences = []
-        self.load()
-
-    def store(self, experience):
-        self.experiences.append(experience)
-        self.save()
-
-    def novelty(self, stimulus):
-        count = sum(1 for e in self.experiences if e["stimulus"] == stimulus)
-        return 1.0 / (1 + count)
-
-    def save(self):
-        with open(self.filename, "w") as f:
-            json.dump(self.experiences, f, indent=2)
-
-    def load(self):
-        if os.path.exists(self.filename):
-            try:
-                with open(self.filename, "r") as f:
-                    self.experiences = json.load(f)
-            except json.JSONDecodeError:
-                self.experiences = []
-
-# value class
-class Values:
-    def __init__(self):
-        self.filename = os.path.join(BASE_DIR, "values.json")
-        self.values = {}
-        self.load()
-
-    def get(self, key):
-        return self.values.get(key, 0.0)
-
-    def update(self, key, reward, lr=0.1):
-        self.values[key] = self.get(key) + lr * reward
-        self.save()
-
-    def save(self):
-        with open(self.filename, "w") as f:
-            json.dump(self.values, f, indent=2)
-
-    def load(self):
-        if os.path.exists(self.filename):
-            try:
-                with open(self.filename, "r") as f:
-                    self.values = json.load(f)
-            except json.JSONDecodeError:
-                self.values = {}
-
-# Agent class
 class Agent:
-    def __init__(self):
+    def __init__(self, tick_rate=0.2):
+        self.tick_rate = tick_rate
+        self.running = False
+
+        # Core systems
         self.memory = Memory()
-        self.values = Values()
+        self.state = InternalState()
+        self.perception = Perception()
+        self.action = Action()
 
-        self.head_x = 0.0
-        self.head_y = 0.0
+        # GUI communication
+        self.gui_queue = Queue()
 
-        # PUBLIC STATE (GUI READS ONLY)
-        self.state = {
-            "stimulus": None,
-            "action": None,
-            "reward": 0.0,
-            "head": {"x": 0.0, "y": 0.0}
-        }
+        # Load values
+        self.values = self.load_values()
 
+    # -----------------------------
+    # Load values.json safely
+    # -----------------------------
+    def load_values(self):
+        try:
+            with open("values.json", "r") as f:
+                return json.load(f)
+        except Exception:
+            # Default values if file missing
+            return {
+                "curiosity_threshold": 0.75,
+                "memory_importance_base": 0.4,
+                "memory_importance_curiosity_bonus": 0.4,
+                "energy_decay": 0.001,
+                "curiosity_growth": 0.0005,
+                "silence_tolerance": 10.0
+            }
+
+    # -----------------------------
+    # Core cognitive steps
+    # -----------------------------
     def perceive(self):
-        return {
-            "type": "visual",
-            "x": random.uniform(-1, 1),
-            "y": random.uniform(-1, 1)
-        }
+        return self.perception.observe()
 
-    def appraise(self, stimulus):
-        novelty = self.memory.novelty(stimulus)
-        return novelty
+    def think(self, perception):
+        """
+        Generate a thought based on perception, memory, and state.
+        """
+        # Look at recent memory
+        recent = self.memory.recall_recent(3)
+        last_thought = None
+        if recent:
+            last_thought = recent[-1]["event"]["thought"]
 
-    def decide(self, stimulus):
-        actions = ["look_left", "look_right", "look_up", "look_down", "idle"]
-        return max(actions, key=lambda a: self.values.get(a) + random.random() * 0.1)
+        # 1 Curiosity-driven thought
+        if self.state.curiosity > self.values.get("curiosity_threshold", 0.75):
+            return "I wonder what this is."
 
-    def act(self, action, stimulus):
-        if action == "look_left":
-            self.head_x -= 0.1
-        elif action == "look_right":
-            self.head_x += 0.1
-        elif action == "look_up":
-            self.head_y += 0.1
-        elif action == "look_down":
-            self.head_y -= 0.1
+        # 2 Continue pondering unresolved thought
+        if last_thought and "wonder" in last_thought.lower():
+            return "I am still thinking about that."
 
-        self.head_x = max(-1, min(1, self.head_x))
-        self.head_y = max(-1, min(1, self.head_y))
+        # 3 Silence awareness
+        if perception.get("idle_time", 0) > self.values.get("silence_tolerance", 10.0):
+            return "It is very quiet."
 
-    def reward(self, stimulus):
-        distance = abs(stimulus["x"] - self.head_x) + abs(stimulus["y"] - self.head_y)
-        return 1.0 - distance
+        # 3 Default
+        return "Nothing interesting is happening."
 
-    def step(self):
-        stimulus = self.perceive()
-        appraisal = self.appraise(stimulus)
-        action = self.decide(stimulus)
-        self.act(action, stimulus)
-        reward = self.reward(stimulus)
+    def decide_importance(self, thought):
+        importance = self.values.get("memory_importance_base", 0.4)
+        if "wonder" in thought.lower():
+            importance += self.values.get("memory_importance_curiosity_bonus", 0.4)
+        return min(1.0, importance)
 
-        self.memory.store({"stimulus": stimulus, "action": action, "reward": reward})
-        self.values.update(action, reward)
+    def act(self, thought):
+        self.action.execute(thought)
+        state_snapshot = self.state.snapshot()
+        self.gui_queue.put(f"THOUGHT: {thought}\nSTATE: {state_snapshot}")
 
-        # Update public state
-        self.state["stimulus"] = stimulus
-        self.state["action"] = action
-        self.state["reward"] = reward
-        self.state["head"] = {"x": self.head_x, "y": self.head_y}
+    # -----------------------------
+    # Main loop
+    # -----------------------------
+    def loop(self):
+        self.running = True
+        self.gui_queue.put("manifess AI started.")
 
+        while self.running:
+            perception = self.perceive()
+            thought = self.think(perception)
+            self.act(thought)
 
-if __name__ == "__main__":
-    agent = Agent()
-    while True:
-        agent.step()
-        time.sleep(0.2)
+            # Remember event
+            importance = self.decide_importance(thought)
+            self.memory.remember(
+                event={
+                    "perception": perception,
+                    "thought": thought,
+                    "state": self.state.snapshot()
+                },
+                importance=importance
+            )
+
+            # Update internal state
+            self.state.energy = max(0.0, self.state.energy - self.values.get("energy_decay", 0.001))
+            self.state.curiosity = min(1.0, self.state.curiosity + self.values.get("curiosity_growth", 0.0005))
+
+            time.sleep(self.tick_rate)
+
+        self.gui_queue.put("manifess AI stopped.")
+
+    def stop(self):
+        self.running = False
