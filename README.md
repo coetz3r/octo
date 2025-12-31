@@ -63,6 +63,23 @@ manifess/
 - Perception: Extend perception.py to incorporate real sensor inputs.
 - Actions: Extend GUI methods (_explore(), _wait(), etc.) to link to robotics, motors, or other outputs.
 
+## Contributing
+We welcome contributions! You can help by:
+
+- Reporting bugs or issues
+- Suggesting new features or improvements
+- Adding new perception modules or action methods
+- Improving documentation or examples
+
+## To contribute:
+1. Fork the repository
+2. Create a new branch (git checkout -b feature-name)
+3. Make your changes and commit (git commit -m "Add feature")
+4. Push to your branch (git push origin feature-name)
+5. Open a Pull Request
+
+Please keep contributions compatible with Raspberry Pi performance whenever possible.
+
 ## License
 
 MIT License
