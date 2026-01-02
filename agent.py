@@ -1,12 +1,13 @@
 # agent.py
 import time
 import json
-from queue import Queue
 
+from queue import Queue
 from memory import Memory
 from state import InternalState
 from perception import Perception
 from action import Action
+from introspection import Introspection
 
 class Agent:
     def __init__(self, tick_rate=0.2):
@@ -24,6 +25,11 @@ class Agent:
 
         # Load values
         self.values = self.load_values()
+
+        # not sure yet #########
+        self.introspection = Introspection()
+        self.last_introspection = {}
+
 
     # -----------------------------
     # Load values.json safely
@@ -50,9 +56,9 @@ class Agent:
         return self.perception.observe()
 
     def think(self, perception):
-        """
-        Generate a thought based on perception, memory, and state.
-        """
+        
+        #### Generate a thought based on perception, memory, and state.
+        
         # Look at recent memory
         recent = self.memory.recall_recent(3)
         last_thought = None
@@ -71,7 +77,7 @@ class Agent:
         if perception.get("idle_time", 0) > self.values.get("silence_tolerance", 10.0):
             return "It is very quiet."
 
-        # 3 Default
+        # 4 Default
         return "Nothing interesting is happening."
 
     def decide_importance(self, thought):
@@ -95,6 +101,15 @@ class Agent:
         while self.running:
             perception = self.perceive()
             thought = self.think(perception)
+
+            # Introspect BEFORE acting
+            self.last_introspection = self.introspection.reflect(
+                state=self.state,
+                perception=perception,
+                thought=thought,
+                memory=self.memory
+            )
+
             self.act(thought)
 
             # Remember event
@@ -108,13 +123,42 @@ class Agent:
                 importance=importance
             )
 
-            # Update internal state
-            self.state.energy = max(0.0, self.state.energy - self.values.get("energy_decay", 0.001))
-            self.state.curiosity = min(1.0, self.state.curiosity + self.values.get("curiosity_growth", 0.0005))
+    # -----------------------------
+    # Single-step cycle for GUI / threads
+    # -----------------------------
+    def step(self):
+        perception = self.perceive()
+        thought = self.think(perception)
 
-            time.sleep(self.tick_rate)
+        # Introspect BEFORE acting
+        self.last_introspection = self.introspection.reflect(
+            state=self.state,
+            perception=perception,
+            thought=thought,
+            memory=self.memory
+        )
+
+        # Act
+        self.act(thought)
+
+        # Remember event
+        importance = self.decide_importance(thought)
+        self.memory.remember(
+            event={
+                "perception": perception,
+                "thought": thought,
+                "state": self.state.snapshot()
+            },
+            importance=importance
+        )
+
+        # Update internal state
+        self.state.energy = max(0.0, self.state.energy - self.values.get("energy_decay", 0.001))
+        self.state.curiosity = min(1.0, self.state.curiosity + self.values.get("curiosity_growth", 0.0005))
+
+        time.sleep(self.tick_rate)
 
         self.gui_queue.put("manifess AI stopped.")
 
     def stop(self):
-        self.running = False
+        self.running = False                            
