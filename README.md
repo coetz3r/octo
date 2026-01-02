@@ -29,7 +29,7 @@ The current code only uses Python standard libraries, so requirements.txt may no
 
 ## Usage
 Run the main program:
-python main.py
+python3 main.py
 
 - The AI agent starts in a background thread.
 - The GUI shows thoughts, internal state, and actions in a single stable view.
